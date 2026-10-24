@@ -1,0 +1,32 @@
+name: PropertyPal Scraper (Playwright)
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # Каждые 4 часа (экономим минуты)
+  workflow_dispatch:  # Кнопка для ручного запуска
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install Python dependencies
+      run: pip install -r requirements.txt
+    
+    - name: Install Playwright browsers
+      run: playwright install chromium --with-deps
+    
+    - name: Run scraper
+      env:
+        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+      run: python propertypal_playwright.py
