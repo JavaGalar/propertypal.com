@@ -14,7 +14,8 @@ if not BOT_TOKEN or not CHANNEL_ID:
     exit(1)
 
 # URL с сортировкой "Сначала новые"
-URL = "https://www.propertypal.com/property-for-sale/belfast/sort-dateHigh"
+# URL = "https://www.propertypal.com/property-for-sale/belfast/sort-dateHigh"
+URL = "https://www.propertypal.com/search?expand=15.0&runit=m&minbeds=2&maxbeds=2&pt=residential&min=40000&max=120000&currency=GBP&term=44&sta=forSale&st=sale"
 
 STATE_FILE = "propertypal_sent.json"
 
