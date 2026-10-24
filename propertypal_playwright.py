@@ -56,13 +56,13 @@ async def get_property_links():
             
             # 4. Фильтруем только те, что ведут на объекты
             property_links = []
-            #for href in all_hrefs:
-            #    if "/property-for-sale/" in href or "/property-to-rent/" in href:
-            #        # Убираем якоря (#) и дубликаты
-            #        clean_href = href.split("#")[0]
-            #        full_url = f"https://www.propertypal.com{clean_href}"
-            #        if full_url not in property_links:
-            #            property_links.append(full_url)
+            for href in all_hrefs:
+                if "/property-for-sale/" in href or "/property-to-rent/" in href:
+                    # Убираем якоря (#) и дубликаты
+                    clean_href = href.split("#")[0]
+                    full_url = f"https://www.propertypal.com{clean_href}"
+                    if full_url not in property_links:
+                        property_links.append(full_url)
             
             print(f"📊 Всего найдено уникальных ссылок на объекты: {len(property_links)}")
             
