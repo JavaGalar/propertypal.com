@@ -4,6 +4,7 @@ import os
 import time
 import requests
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 
 # === НАСТРОЙКИ ===
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -13,60 +14,66 @@ if not BOT_TOKEN or not CHANNEL_ID:
     print("❌ Ошибка: Не заданы переменные окружения")
     exit(1)
 
-# Используем простой URL, который точно должен выдавать результаты
-URL = "https://www.propertypal.com/property-for-sale/enniskillen/price-120000"
+URL = "https://www.propertypal.com/property-for-sale/belfast"
 STATE_FILE = "propertypal_sent.json"
 
 async def get_property_links():
     async with async_playwright() as p:
-        print("🌐 Запускаем браузер...")
+        print("🌐 Запускаем браузер с маскировкой (Stealth)...")
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080}
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
         
+        # 1. Включаем Stealth (маскировка от Cloudflare)
+        await stealth_async(page)
+        
+        # 2. Добавляем реалистичные заголовки, как у настоящего браузера
+        await page.set_extra_http_headers({
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
+            "Upgrade-Insecure-Requests": "1",
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "none",
+            "Sec-Fetch-User": "?1",
+        })
+
         try:
             print(f"🔗 Открываем: {URL}")
             await page.goto(URL, wait_until="domcontentloaded", timeout=30000)
             
-            print("⏳ Ждём 5 секунд для прогрузки JavaScript...")
+            print("⏳ Ждём 5 секунд для прогрузки JS и обхода проверок Cloudflare...")
             await page.wait_for_timeout(5000)
             
-            # 1. Пробуем прокрутить страницу вниз, чтобы сработал lazy loading
-            print("📜 Прокручиваем страницу вниз...")
+            # Прокрутка вниз для срабатывания lazy loading
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await page.wait_for_timeout(2000)
             
-            # 2. Пытаемся закрыть баннер cookies, если он есть
-            try:
-                await page.click('button:has-text("Accept"), button:has-text("Accept All"), button:has-text("I accept"), .cc-accept', timeout=3000)
-                print("✅ Баннер cookies закрыт")
-                await page.wait_for_timeout(1000)
-            except Exception:
-                print("ℹ️ Баннер cookies не найден или уже закрыт")
+            # 3. ПРОВЕРКА: не попали ли мы на страницу блокировки Cloudflare?
+            html = await page.content()
+            if "Just a moment..." in html or "cf-ray" in html:
+                print("❌ Cloudflare всё ещё блокирует нас (страница-заглушка).")
+                return []
 
-            # 3. Собираем ВСЕ ссылки на странице
-            print("🔍 Ищем все ссылки на странице...")
+            # 4. Сбор ссылок
+            print("🔍 Ищем ссылки на объекты...")
             all_hrefs = await page.eval_on_selector_all(
                 'a[href]',
-                'elements => elements.map(a => a.getAttribute("href")).filter(h => h && h.startsWith("/"))'
+                'elements => elements.map(a => a.getAttribute("href")).filter(h => h and h.startswith("/"))'
             )
             
-            # 4. Фильтруем только те, что ведут на объекты
             property_links = []
             for href in all_hrefs:
                 if "/property-for-sale/" in href or "/property-to-rent/" in href:
-                    # Убираем якоря (#) и дубликаты
                     clean_href = href.split("#")[0]
                     full_url = f"https://www.propertypal.com{clean_href}"
                     if full_url not in property_links:
                         property_links.append(full_url)
             
-            print(f"📊 Всего найдено уникальных ссылок на объекты: {len(property_links)}")
-            
-            # Выводим первые 3 ссылки в лог для проверки
+            print(f"📊 Найдено уникальных ссылок на объекты: {len(property_links)}")
             for i, link in enumerate(property_links[:3], 1):
                 print(f"   {i}. {link}")
                 
@@ -76,7 +83,7 @@ async def get_property_links():
         finally:
             await browser.close()
             
-        return property_links
+        return list(dict.fromkeys(property_links))
 
 def load_sent():
     if os.path.exists(STATE_FILE):
@@ -103,11 +110,11 @@ def send_to_telegram(link):
         print(f"⚠️ Ошибка Telegram: {response.text}")
 
 async def main():
-    print("🚀 Запуск парсера PropertyPal...")
+    print("🚀 Запуск парсера PropertyPal (Anti-Cloudflare)...")
     current_links = await get_property_links()
     
     if not current_links:
-        print("❌ Ссылки не найдены. Возможно, сайт показывает капчу или изменил структуру.")
+        print("❌ Ссылки не найдены. Возможно, Cloudflare заблокировал IP GitHub Actions.")
         return
     
     sent = load_sent()
@@ -123,7 +130,7 @@ async def main():
         save_sent(sent)
         print("\n🎉 Готово!")
     else:
-        print("\n💤 Новых объявлений нет (все уже были отправлены ранее).")
+        print("\n💤 Новых объявлений нет.")
 
 if __name__ == "__main__":
     asyncio.run(main())
