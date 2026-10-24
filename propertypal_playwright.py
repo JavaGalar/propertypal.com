@@ -14,7 +14,7 @@ if not BOT_TOKEN or not CHANNEL_ID:
     exit(1)
 
 # Используем простой URL, который точно должен выдавать результаты
-URL = "https://www.propertypal.com/search?expand=15.0&runit=m&minbeds=2&maxbeds=2&pt=residential&min=40000&max=120000&currency=GBP&term=44&sta=forSale&st=sale"
+URL = "https://www.propertypal.com/property-for-sale/enniskillen/price-120000"
 STATE_FILE = "propertypal_sent.json"
 
 async def get_property_links():
